@@ -8,13 +8,16 @@ Tested using `cargo 1.64.0 (387270bc7 2022-09-16)` and the WebAssembly Binary To
 
 * Memory declared in a WebAssembly module is exposed to JavaScript as an `ArrayBuffer`
 * JavaScript can only access the contents of an `ArrayBuffer` through an overlay such as a `Uint8Array`
+* Any structure laid overtop of an `ArrayBuffer` will become unusable if (for some reason) the underlying `ArrayBuffer` is moved to a different memory location.
+
+It is suspected that some sort of memory move or reallocation is taking place here which, in turn, causes any overlaid structures to become detached, and thus unusable.
 
 ## Error Description
 
 The Wasm module contains a function called `set_name` that formats a string in shared memory, then returns the length of that string.
 
 * If the Wasm module is generated using `wat2wasm`, calling `set_name` works fine and has no impact on JavaScript
-* If the Wasm module is generated using `cargo build --target=wasm32-unknown-unknown` or `wasm-pack build`, calling `set_name` also works fine, but afterwards, the `Uint8Array` overlay through which JavaScript accesses the data is unusable because it has become detached from the underlying `ArrayBuffer`.
+* If the Wasm module is generated using `cargo build --target=wasm32-unknown-unknown` or `wasm-pack build`, calling `set_name` also works fine, but afterwards, the `Uint8Array` through which JavaScript accesses the data is unusable because it has become detached from the underlying `ArrayBuffer`.
   This then causes the following error:
    
    ```
