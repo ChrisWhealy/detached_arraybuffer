@@ -1,9 +1,11 @@
 // Wasm module built using wat2wasm
-// const wasmFilePath = "./memoryguest.wasm"
+const wasmFilePath = "./memoryguest.wasm"
 
-// Wasm module built using either cargo or wasm-pack
+// Wasm module built using cargo
 // const wasmFilePath = "./target/wasm32-unknown-unknown/debug/memoryguest.wasm"
-const wasmFilePath = "./pkg/memoryguest_bg.wasm"
+
+// Wasm module built using wasm-pack
+// const wasmFilePath = "./pkg/memoryguest_bg.wasm"
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Helpers
