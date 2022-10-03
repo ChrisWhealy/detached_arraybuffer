@@ -8,28 +8,22 @@ Tested using `cargo 1.64.0 (387270bc7 2022-09-16)` and the WebAssembly Binary To
 
 * Memory declared in a WebAssembly module is exposed to JavaScript as an `ArrayBuffer`
 * JavaScript can only access the contents of an `ArrayBuffer` through an overlay such as a `Uint8Array`
-* If the Wasm module was generated from a raw WebAssembly Text file using `wat2wasm`, then the JavaScript demo code works fine
-* If the Wasm module was generated from a Rust program using either `cargo` or `wasm-apack`, then the same JavaScript demo code crashes with the following error
-   ```
-   TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
-   ```
-
-The bottom line is that after a certain function in the Wasm module is called, the `Uint8Array` through which shared memory is accessed becomes detached from the underlying `ArrayBuffer`: hence the above error.
-
-This error only happens if the Wasm module is generated using `cargo`, either as:
-
-* `cargo build --target=wasm32-unknown-unknown` or
-* `wasm-pack build`
-
-This error appears to have been introduced by `cargo` as it is not specific to any particular JavaScript engine.
-It occurs both on the server-side in NodeJS, and client side in Firefox, Safari and Brave.
 
 ## Error Description
 
 The Wasm module contains a function called `set_name` that formats a string in shared memory, then returns the length of that string.
 
 * If the Wasm module is generated using `wat2wasm`, calling `set_name` works fine and has no impact on JavaScript
-* If the Wasm module is generated using `cargo` or `wasm-pack`, calling `set_name` also works fine, but afterwards, the `Uint8Array` overlay called `mem8` is unusable because it has become detached from the underlying `ArrayBuffer`.
+* If the Wasm module is generated using `cargo build --target=wasm32-unknown-unknown` or `wasm-pack build`, calling `set_name` also works fine, but afterwards, the `Uint8Array` overlay through which JavaScript accesses the data is unusable because it has become detached from the underlying `ArrayBuffer`.
+  This then causes the following error:
+   
+   ```
+   TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
+   ```
+
+This error appears to have been introduced by `cargo` as it is not specific to any particular JavaScript engine.
+It occurs both on the server-side in NodeJS, and client side in Firefox, Safari and Brave.
+
 
 ## Local Execution
 
