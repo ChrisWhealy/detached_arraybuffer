@@ -10,7 +10,8 @@ Tested using `cargo 1.64.0 (387270bc7 2022-09-16)` and the WebAssembly Binary To
 * JavaScript can only access the contents of an `ArrayBuffer` through an overlay such as a `Uint8Array`
 * Any structure laid overtop of an `ArrayBuffer` will become unusable if (for some reason) the underlying `ArrayBuffer` is moved to a different memory location.
 
-It is suspected that some sort of memory move or reallocation is taking place here which, in turn, causes any overlaid structures to become detached, and thus unusable.
+***Tentative Analysis***<br>
+It appears that `cargo` may have generated some code in the WebAssembly module that alters shared memory (the `ArrayBuffer` seen by JavaScript) in such a way that any overlaid structures become detached, and are thus unusable.
 
 ## Error Description
 
