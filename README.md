@@ -78,8 +78,6 @@ The Wasm module contains a function called `set_name` that formats a string in s
 
 ### Server Side Testing
 
-#### Successful Execution Using `wat2wasm` Module
-
 As delivered, the server side version will run successfully:
 
 ```bash
