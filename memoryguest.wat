@@ -15,11 +15,15 @@
   (func (export "get_name_ptr")       (result i32) (global.get $NAME_OFFSET))
   (func (export "get_msg_ptr")        (result i32) (global.get $MSG_OFFSET))
 
-  ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  ;; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+  ;; Here we expect that the host has already written both a salutation and a name to the memory locations returned by
+  ;; calling $get_salutation_ptr and $get_name_ptr.
+  ;; The host then obtains the formatted greeting by calling $set_name, then looking in the memory location returned by
+  ;; calling $get_msg_ptr and reading the number of bytes returned by this function
   (func (export "set_name")
-        (param $sal_len i32)
-        (param $name_len i32)
-        (result i32)
+        (param $sal_len i32)  ;; Length of salutation written by the host
+        (param $name_len i32) ;; Length of name written by the host
+        (result i32)          ;; Length of resulting formatted string
 
     ;; Declare a write pointer and set it to the start of the message area
     (local $msg_ptr i32)
