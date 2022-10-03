@@ -4,7 +4,7 @@ Whilst learning about sharing memory between the Host environmemt and a WebAssem
 
 Tested using `cargo 1.64.0 (387270bc7 2022-09-16)` and the WebAssembly Binary Toolkit version 1.0.29
 
-## Overview
+## TL;DR
 
 * Memory declared in a WebAssembly module is exposed to JavaScript as an `ArrayBuffer`
 * JavaScript can only access the contents of an `ArrayBuffer` through an overlay such as a `Uint8Array`
