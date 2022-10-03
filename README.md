@@ -118,7 +118,7 @@ Now that a new `Uint9Array` is being overlayed onto the WebAssembly `ArrayBUffer
 
 ### Client Side Testing
 
-Start a Python webserver
+Start a Python webserver from this repo's top level directory:
 
 ```bash
 python3 -m http.server 8080
