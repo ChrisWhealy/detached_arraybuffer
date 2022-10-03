@@ -1,0 +1,14 @@
+[package]
+name = "memoryguest"
+version = "0.1.0"
+authors = ["Kevin Hoffman <alothien@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "s"
+
+[dependencies]
+wasm-bindgen = "0.2"
