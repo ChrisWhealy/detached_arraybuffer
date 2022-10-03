@@ -112,7 +112,7 @@ TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
 ```
 
 Now comment out line 52 and uncomment lines 47 and 48 and rerun the test.
-Now that a new `Uint9Array` is being overlayed onto the WebAssembly `ArrayBUffer`, the coding runs correctly.
+Now that a new `Uint8Array` is being overlayed onto the WebAssembly `ArrayBuffer`, the coding runs correctly.
 
 ### Client Side Testing
 
