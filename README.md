@@ -54,12 +54,14 @@ The Wasm module contains a function called `set_name` that formats a string in s
    ```bash
    cd detached_arraybuffer
    ```
-1. Generate the `.wasm` module using `wat2wasm`
+1. Generate the `.wasm` module using `wat2wasm`.
+   The functionality being compiled here has been written in raw WebAssembly text.
 
    ```bash
    wat2wasm memoryguest.wat
    ```
-1. Build a second version of the Wasm module using `cargo`
+1. Build a second version of the Wasm module using `cargo`.
+   The Rust module being compiled here implements the equivalent functionality through the same API as that found in the WebAssembly Text file.
 
    ```bash
    cargo build --target=wasm32-unknown-unknown
@@ -121,7 +123,7 @@ Now that a new `Uint9Array` is being overlayed onto the WebAssembly `ArrayBUffer
 Start a Python webserver
 
 ```bash
-python3 -m http-server 8080
+python3 -m http.server 8080
 ```
 
 Point your Browser to <http://localhost:8080> and open the developer tools.
@@ -132,4 +134,4 @@ Look at the console output.
 >
 ```
 
-Edit `client.js`, then follow the same instructions as above for `server.js`
+Edit `client.js`, then follow the same instructions as above for `server.js` and refresh your browser page.
