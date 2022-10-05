@@ -11,15 +11,18 @@
 * If WebAssembly memory grows, then a new JavaScript `ArrayBuffer` be created and the old one thrown away.
 * Consequently, any JavaScript objects that overlay the old `ArrayBuffer` are immediately invalidated and must be redefined against the new `ArrayBuffer`.
 
+This problem will disappear if a JavaScript `ArrayBuffer` is given the ability to grow.
+This functionality is currently at the [proposal stage](https://www.proposals.es/proposals/Resizable%20and%20growable%20ArrayBuffers).
+
 ## What Consequences Do These Facts Create When Writing In Rust?
 
-When creating a WebAssembly module, `cargo` knows that memory growth might be required, so it builds the necessary coding into the WebAssembly module to call `memory.grow`.
-Then, if more memory is required than is currently being shared between the two environments, memory growth will be performed automatically (and silently!)
+When writing a Rust program that you intend to distribute as a WebAssembly module, `cargo` knows that memory growth might be required; therefore, it builds the necessary functions into the WebAssembly module for calling `memory.grow`.
+This allows memory growth to happen automatically (and silently!)
 
-Should memory growth then occur,[^1] the host environment still has access to the shared memory `ArrayBuffer`, but this is now a completely new block of memory.
-Consequently, the floor has literally been pulled out from underneath them all of overlay objects that previously gave access to the old `ArrayBuffer` object (I.E. they are said to have become "detached")
+Should memory growth occur,[^1] the host environment still has access to the shared memory `ArrayBuffer`, but this is now a completely new block of memory.
+Now that the old `ArrayBuffer` has disappeared, the floor has literally been pulled out from underneath all the overlay objects that gave access to the "pre-growth" shared memory (I.E. they are said to have become "detached").
 
-If you attempt to access shared memory using a "pre-growth" object, you will see this error:
+If you then attempt to access shared memory using one of these "pre-growth" objects, you will see an error such as this:
 
 ```
 TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
@@ -27,7 +30,7 @@ TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
 
 ## Local Execution
 
-Here is really simple demonstration of this problem.
+Here is a really simple demonstration of this problem.
 In this trivial application, known locations in shared memory will be used to exchange data between a WebAssembly module and a JavaScript program.
 
 ### Generate the WebAssembly Module
