@@ -1,46 +1,83 @@
-# How to Avoid the "Detached `ArrayBuffer`" Problem After a Wasm Function Call
+# WebAssembly `memory.grow` and the "Detached `ArrayBuffer`" Problem
 
-## TL;DR
+## Summary
 
-* Memory allocated by a WebAssembly module can be shared with its host environment.
-* If JavaScript is the host environment, it sees this memory as an `ArrayBuffer`.
-* JavaScript can only access the contents of an `ArrayBuffer` through an overlaid structure such as a `Uint8Array`.
-   > Under the surface, JavaScript then creates a pointer that anchors the `Uint8Array` to the correct location within the `ArrayBuffer` (usually the start).
-* When writing Rust code that will be compiled to WebAssembly, certain actions in Rust *might* require more memory than is currently being shared between the two environments.
+* WebAssembly and its host environment can share a block of linear memory.
+* This linear block of memory can be extended by calling the WebAssembly instruction [`memory.grow`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory).
+* If JavaScript is the host environment, then shared memory is available as an `ArrayBuffer`.
+* JavaScript cannot directly access the contents of an `ArrayBuffer`.
+   Instead, it must use a structure such as a `Uint8Array` or a `Uint32Array` as an overlay or mask, then access the `ArrayBuffer` via that structure's semantics.
+* If WebAssembly memory grows, then the `ArrayBuffer` seen by JavaScript is replaced and this immediately invalidates any JavaScript objects previously laid over top of the old `ArrayBuffer`
 
-   If this is the case, then Rust will silently and automatically allocate a new block of memory.
-* This has no effect on the `ArrayBuffer` seen by JavaScript; however, any JavaScript structure laid overtop of that `ArrayBuffer` will immediately become "detached" because its pointer is now invalid.
-   You will then seen this error:
-   ```
-   TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
-   ```
+## What Consequences Does This Have When Writing In Rust?
 
-## Demo Scenario
+When writing Rust code that will be compiled to WebAssembly, certain actions in Rust ***might*** require more memory than is currently being shared between the two environments; in which case, memory growth will be performed automatically (and silently!)
 
-In this really simple exercise, shared memory will be used to exchange data between a WebAssembly module and a JavaScript program.
+When creating a WebAssembly module, `cargo` knows that memory growth might be required, so it builds the necessary coding into the WebAssembly module to call `memory.grow`.
 
-1. The JavaScript program obtains the value of some known locations in shared memory (I.E. long-lived pointers)
-1. The JavaScript program then writes certain values to these locations.
-1. The Wasm program formats these values and places the result at another known location
-1. The JavaScript program then obtains the formated value by reading shared memory
+If any functionality is then invoked[^1] that causes memory growth, the host environment still has access to the shared memory, but it is now completely ***different*** block of memory.
+Consequently, all overlay objects that were created prior to memory growth have become detached because the floor has literally been pulled out from underneath them...
 
-| Offset | Expected Value | Discovered by calling Wasm function
+If you attempt to access shared memory using a "pre-growth" object, you will see this error:
+
+```
+TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
+```
+
+## Local Execution
+
+Here is really simple demonstration of this problem.
+In this trivial application, known locations in shared memory will be used to exchange data between a WebAssembly module and a JavaScript program.
+
+### Generate the WebAssembly Module
+
+Three different versions of the Wasm module can be generated:
+
+1. A [working version](./memoryguest.wat) from source code written in WebAssembly Text
+
+   To use this version, run `wat2wasm memoryguest.wat`
+1. A [broken version](./src/lib_growth.rs) from source code written in Rust
+
+   To use this version, rename `./src/lib_growth.rs` to `./src/lib.rs`, then run `cargo build --target=wasm32-unknown-unknown`
+1. A [working version](./src/lib_no_growth.rs) from source code written in Rust
+
+Irrespective of the Wasm module you generated, the tests are run as follows:
+
+1. In both `server.js` and `client.js`, ensure that the variable `wasmFilePath` points to the particular Wasm module you have generated`"./memoryguest.wasm"`
+1. To test the Wasm module server side, run `node server.js`
+1. To test the Wasm module in a browser, first start a temporary Web Server (`python3 -m http.server 8080`), then point you browser to <http://localhost:8080> and open the developer console
+
+When the test succeeds, you will see
+
+```
+Ahoy there, Testy McTestface!
+```
+
+When the test fails, you will see Type Error shown above.
+
+## Implementation
+
+The memory map looks like this:
+
+| Offset | Value | Discovered by calling Wasm function
 |--:|---|---
 | 0 | Salutation | `get_salutation_ptr`
 | 16 | Name | `get_name_ptr`
 | 32 | Formatted greeting | `get_msg_ptr`
 
-In this example,  `Ahoy there` is written to memory offset 0 (the salutation) and `Testy MsTestface` is written to memory at offset 16 (the name)
+Irrespective of the source language from which the Wasm module was generated, the JavaScript program must first obtain the values of the memory locations shown above, then it write the expected values to those locations.
 
-Then the JavaScript program calls the Wasm function `set_name`.
-This function combines the salutation and name into a greeting and returns the total length of that greeting.
+Next, it calls the Wasm function `set_name` that combines the salutation and name, then writes the greeting to another known memory location.
+`set_name` then returns the length of the formatted greeting.
 
-The greeting is then read from shared memory at offset 32.
+Finally, the JavaScript program reads the greeting from shared memory and writes it to the console.
 
-## The Cause of the Problem
+## But What Caused Memory Growth?
 
-Look at the Rust coding in [./src/lib_broken.rs](./src/lib_broken.rs) from which the WebAssembly module is compiled.
-Within function `set_name` there is the apparently harmless declaration of a new `String` called `greeting` that is populated by calling the `format!()` macro.
+Look at the Rust coding in [./src/lib_growth.rs](./src/lib_growth.rs) from which the WebAssembly module is compiled.
+Within function `set_name`, the `format!()` macro is used to assemble the result, which is then stored in an intermediate `String` called `greeting`.
+
+Looks harmless enough...
 
 ```rust
 #[no_mangle]
@@ -52,49 +89,59 @@ pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
 // snip...
 ```
 
-Rust realises that in order to complete the declaration of the new `String`, it needs more memory.
-So it silently and helpfully handles this implementation detail for you.
-The bad news is that any overlaid structures in the host environment (such as `Uint8Array`s) have literally had the floor pulled out from underneath them, and are consequently unusable...
+However, the declaration of the new `String` requires more memory than has currently been allocated, so `cargo` has helpfully generated the necessary WebAssembly functionality to automatically issue the instruction `memory.grow`.
 
-## JavaScript Coding
+## Calling The Broken Code From JavaScript
 
-This snippet of code is part of [./server.js](./server.js) has available to it an object called `wasmExports` from which everying exported by the Wasm module is available.
+Look at [./server.js](./server.js) to see the full context of this coding.
 
 ```javascript
 const salutation = "Ahoy there"
 const name = "Testy McTestface"
 
+// Look at shared memory as an array of unsigned bytes
 const mem8 = new Uint8Array(wasmExports.memory.buffer)
 
+// Fetch long-lived pointers
 const sal_ptr = wasmExports.get_salutation_ptr()
 const name_ptr = wasmExports.get_name_ptr()
 const msg_ptr = wasmExports.get_msg_ptr()
 
+// Store salutation and name at the expected locations
 mem8.set(stringToAsciiArray(salutation), sal_ptr)
 mem8.set(stringToAsciiArray(name), name_ptr)
 
+// Tell Wasm to write the formatted greeting to the known memory location then return its length
 let msg_len = wasmExports.set_name(salutation.length, name.length)
+
+// Read greeting from shared memory
 let msg_text = asciiArrayToString(mem8.slice(msg_ptr, msg_ptr + msg_len))
 
 console.log(msg_text)
 ```
 
-Everything looks fine here, except...
-
-Due to the internal memory requirements of the Wasm function `set_name`, the `Uint8Array` called `mem8` suddenly becomes unusable...
+So let's run this:
 
 ```bash
 $ node server.js
-/Users/chris/Developer/WebAssembly/detached_arraybuffer/server.js:52
+/Users/chris/Developer/WebAssembly/detached_arraybuffer/server.js:60
     let msg_text = asciiArrayToString(mem8.slice(msg_ptr, msg_ptr + msg_len))
                                            ^
 
 TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
     at Uint8Array.slice (<anonymous>)
-    at /Users/chris/Developer/WebAssembly/detached_arraybuffer/server.js:52:44
+    at /Users/chris/Developer/WebAssembly/detached_arraybuffer/server.js:60:44
 ```
 
+Since the call to the Wasm function `set_name` silently caused `memory.grow` to be called, the old `ArrayBuffer` over which the `Uint8Array` called `mem8` had been laid no longer exists.
+
 # Two Solutions
+
+We can take one of two possible approaches to solving this problem.
+Either:
+
+1. We make a mental note of the fact that calling `set_name` has this undesirable side-effect, and adjust the JavaScript code to work around the problem, or
+1. We adjust the Rust coding so that when `set_name` is called, it does not silently call `memory.grow`
 
 ## 1. A JavaScript Workaround
 
@@ -117,13 +164,15 @@ let msg_text = asciiArrayToString(mem8.slice(msg_ptr, msg_ptr + msg_len))
 console.log(msg_text)
 ```
 
-Now everything works because the `mem8` array has been "reattached" to the underlying `ArrayBuffer`'s new location.
+Now everything works because the `mem8` array has been "reattached" to the new `ArrayBuffer`.
 
 ## 2. Solve the Problem in Rust
 
 To actually solve the problem, the Rust coding needs to avoid invoking any instructions that would cause more memory to be allocated.
 
-This means that the bytes of character string need to be written directly to the `[u8]` buffer, and not accumulated in an intermediate `String` object.
+This means that instead of using an intermediate `String` object, we write the bytes of character string directly to the `[u8]` buffer.
+
+The full solution can be seen in [./src/lib_no_growth.rs](./src/lib_no_growth.rs), but the relevant changes are shown below:
 
 ```rust
 pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
@@ -150,13 +199,6 @@ pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
 
     (idx - MSG_OFFSET) as i32
 }
-
-unsafe fn copy_bytes(to: usize, from: usize, len: i32) {
-    BUFFER[from..(from + len as usize)]
-        .iter()
-        .enumerate()
-        .for_each(|(idx, byte)| {
-            BUFFER[to + idx] = *byte;
-        })
-}
 ```
+
+[^1]: This functionality could be invoked either from WebAssembly or the host environment

@@ -9,6 +9,7 @@ const COMMA: u8 = 44;
 
 static mut BUFFER: [u8; MEMORY_BUFFER_SIZE] = [0; MEMORY_BUFFER_SIZE];
 
+/// Return the long-lived pointers to known memory locations
 #[no_mangle]
 pub unsafe extern "C" fn get_salutation_ptr() -> *const u8 {
     get_ptr(SALUT_OFFSET)
@@ -62,6 +63,7 @@ pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
     (idx - MSG_OFFSET) as i32
 }
 
+/// Helper functions
 unsafe fn get_ptr(offset: usize) -> *const u8 {
     BUFFER.as_ptr().add(offset)
 }
