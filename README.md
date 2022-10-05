@@ -3,20 +3,23 @@
 ## Summary
 
 * WebAssembly and its host environment can share a block of linear memory.
-* This linear block of memory can be extended by calling the WebAssembly instruction [`memory.grow`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory).
+* This block of linear memory can be extended by calling the WebAssembly instruction [`memory.grow`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory).
 * If JavaScript is the host environment, then shared memory is available as an `ArrayBuffer`.
 * JavaScript cannot directly access the contents of an `ArrayBuffer`.
-   Instead, it must use a structure such as a `Uint8Array` or a `Uint32Array` as an overlay or mask, then access the `ArrayBuffer` via that structure's semantics.
-* If WebAssembly memory grows, then the `ArrayBuffer` seen by JavaScript is replaced and this immediately invalidates any JavaScript objects previously laid over top of the old `ArrayBuffer`
+   Instead, it must use a structure such as a `Uint8Array` or a `Uint32Array` as an overlay or mask, then access the `ArrayBuffer` via the overlaid structure's semantics.
+* JavaScript `ArrayBuffer`s are of fixed-length and cannot be extended.
+* If WebAssembly memory grows, then the `ArrayBuffer` seen by JavaScript must be replaced with a larger one.
+  This action immediately invalidates any JavaScript objects previously laid over top of the old `ArrayBuffer`
 
-## What Consequences Does This Have When Writing In Rust?
+## What Consequences Do These Facts Create When Writing In Rust?
 
-When writing Rust code that will be compiled to WebAssembly, certain actions in Rust ***might*** require more memory than is currently being shared between the two environments; in which case, memory growth will be performed automatically (and silently!)
+When writing a Rust program that you distribute as a WebAssembly module, certain actions in Rust ***might*** require more memory than is currently being shared between the two environments; in which case, memory growth will be performed automatically (and silently!)
 
 When creating a WebAssembly module, `cargo` knows that memory growth might be required, so it builds the necessary coding into the WebAssembly module to call `memory.grow`.
 
-If any functionality is then invoked[^1] that causes memory growth, the host environment still has access to the shared memory, but it is now completely ***different*** block of memory.
-Consequently, all overlay objects that were created prior to memory growth have become detached because the floor has literally been pulled out from underneath them...
+If any functionality is then invoked[^1] that causes memory growth, the host environment still has access to shared memory, but it is a completely ***new*** block of memory.
+
+After memory growth therefore, the pointers defining the start locations of all overlay objects become invalid (I.E. they are said to have become "detached") &mdash; the floor has literally been pulled out from underneath them...
 
 If you attempt to access shared memory using a "pre-growth" object, you will see this error:
 
@@ -31,21 +34,43 @@ In this trivial application, known locations in shared memory will be used to ex
 
 ### Generate the WebAssembly Module
 
-Three different versions of the Wasm module can be generated:
+Testing can be performed using different versions of the Wasm module:
 
 1. A [working version](./memoryguest.wat) from source code written in WebAssembly Text
 
    To use this version, run `wat2wasm memoryguest.wat`
 1. A [broken version](./src/lib_growth.rs) from source code written in Rust
 
-   To use this version, rename `./src/lib_growth.rs` to `./src/lib.rs`, then run `cargo build --target=wasm32-unknown-unknown`
+   To use this version:
+
+   * Rename `./src/lib_growth.rs` to `./src/lib.rs`
+   * Run `cargo build --target=wasm32-unknown-unknown`
 1. A [working version](./src/lib_no_growth.rs) from source code written in Rust
 
-Irrespective of the Wasm module you generated, the tests are run as follows:
+   To use this version:
 
-1. In both `server.js` and `client.js`, ensure that the variable `wasmFilePath` points to the particular Wasm module you have generated`"./memoryguest.wasm"`
-1. To test the Wasm module server side, run `node server.js`
-1. To test the Wasm module in a browser, first start a temporary Web Server (`python3 -m http.server 8080`), then point you browser to <http://localhost:8080> and open the developer console
+   * Rename `./src/lib_no_growth.rs` to `./src/lib.rs`
+   * Run `cargo build --target=wasm32-unknown-unknown`
+
+### Run the JavaScript Tests
+
+The tests are run as follows:
+
+1. In both `server.js` and `client.js`, ensure that the variable `wasmFilePath` points to the particular Wasm module you wish to test
+1. To test the Wasm module server side, run
+
+   ```bash
+   node server.js
+   ```
+1. To test the Wasm module in a browser
+
+   * Start a temporary Web Server
+
+      ```bash
+      python3 -m http.server 8080
+      ```
+   * Point your browser to <http://localhost:8080>
+   * Open the developer console
 
 When the test succeeds, you will see
 
