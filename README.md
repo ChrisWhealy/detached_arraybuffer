@@ -3,23 +3,21 @@
 ## Summary
 
 * WebAssembly and its host environment can share a block of linear memory.
-* This block of linear memory can be extended by calling the WebAssembly instruction [`memory.grow`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory).
-* If JavaScript is the host environment, then shared memory is available as an `ArrayBuffer`.
+* If JavaScript is the host environment, then shared memory is available as an [`ArrayBuffer`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/ArrayBuffer).
 * JavaScript cannot directly access the contents of an `ArrayBuffer`.
    Instead, it must use a structure such as a `Uint8Array` or a `Uint32Array` as an overlay or mask, then access the `ArrayBuffer` via the overlaid structure's semantics.
-* JavaScript `ArrayBuffer`s are of fixed-length and cannot be extended.
-* If WebAssembly memory grows, then the `ArrayBuffer` seen by JavaScript must be replaced with a larger one.
-  This action immediately invalidates any JavaScript objects previously laid over top of the old `ArrayBuffer`
+* JavaScript `ArrayBuffer`s are of fixed-length and once allocated, cannot be extended.
+* WebAssembly linear memory can be extended by calling [`memory.grow`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory).
+* If WebAssembly memory grows, then a new JavaScript `ArrayBuffer` be created and the old one thrown away.
+* Consequently, any JavaScript objects that overlay the old `ArrayBuffer` are immediately invalidated and must be redefined against the new `ArrayBuffer`.
 
 ## What Consequences Do These Facts Create When Writing In Rust?
 
-When writing a Rust program that you distribute as a WebAssembly module, certain actions in Rust ***might*** require more memory than is currently being shared between the two environments; in which case, memory growth will be performed automatically (and silently!)
-
 When creating a WebAssembly module, `cargo` knows that memory growth might be required, so it builds the necessary coding into the WebAssembly module to call `memory.grow`.
+Then, if more memory is required than is currently being shared between the two environments, memory growth will be performed automatically (and silently!)
 
-If any functionality is then invoked[^1] that causes memory growth, the host environment still has access to shared memory, but it is a completely ***new*** block of memory.
-
-After memory growth therefore, the pointers defining the start locations of all overlay objects become invalid (I.E. they are said to have become "detached") &mdash; the floor has literally been pulled out from underneath them...
+Should memory growth then occur,[^1] the host environment still has access to the shared memory `ArrayBuffer`, but this is now a completely new block of memory.
+Consequently, the floor has literally been pulled out from underneath them all of overlay objects that previously gave access to the old `ArrayBuffer` object (I.E. they are said to have become "detached")
 
 If you attempt to access shared memory using a "pre-growth" object, you will see this error:
 
