@@ -8,18 +8,24 @@
    Instead, it must use a structure such as a `Uint8Array` or a `Uint32Array` as an overlay or mask, then access the `ArrayBuffer` via the overlaid structure's semantics.
 * JavaScript `ArrayBuffer`s are of fixed-length and once allocated, cannot be extended.
 * WebAssembly linear memory can be extended by calling [`memory.grow`](https://webassembly.github.io/spec/core/syntax/instructions.html#syntax-instr-memory).
-* If WebAssembly memory grows, then a new JavaScript `ArrayBuffer` be created and the old one thrown away.
-* Consequently, any JavaScript objects that overlay the old `ArrayBuffer` are immediately invalidated and must be redefined against the new `ArrayBuffer`.
+* If WebAssembly memory grows, then a new JavaScript `ArrayBuffer` is created and the old one thrown away.
+   Consequently, any JavaScript objects that overlaid the old `ArrayBuffer` are immediately invalidated and must be redefined against the new `ArrayBuffer`.
 
 This problem will disappear if a JavaScript `ArrayBuffer` is given the ability to grow.
 This functionality is currently at the [proposal stage](https://www.proposals.es/proposals/Resizable%20and%20growable%20ArrayBuffers).
 
 ## What Consequences Do These Facts Create When Writing In Rust?
 
-When writing a Rust program that you intend to distribute as a WebAssembly module, `cargo` knows that memory growth might be required; therefore, it builds the necessary functions into the WebAssembly module for calling `memory.grow`.
-This allows memory growth to happen automatically (and silently!)
+Before you can compile a Rust program to WebAssembly, you must first install the `wasm32` compilation target:
 
-Should memory growth occur,[^1] the host environment still has access to the shared memory `ArrayBuffer`, but this is now a completely new block of memory.
+```bash
+rustup target add wasm32-unknown-unknown
+```
+
+When writing a Rust program that you intend to distribute as a WebAssembly module, `cargo` knows that memory growth might be required; therefore, it builds the necessary functions into the WebAssembly module for calling `memory.grow`.
+Should it be necessary, memory growth can now happen automatically (and silently!)
+
+If memory growth occurs,[^1] the host environment still has access to the shared memory `ArrayBuffer`, but that `ArrayBuffer` now points to a completely new block of memory.
 Now that the old `ArrayBuffer` has disappeared, the floor has literally been pulled out from underneath all the overlay objects that gave access to the "pre-growth" shared memory (I.E. they are said to have become "detached").
 
 If you then attempt to access shared memory using one of these "pre-growth" objects, you will see an error such as this:
@@ -30,8 +36,9 @@ TypeError: Cannot perform %TypedArray%.prototype.slice on a detached ArrayBuffer
 
 ## Local Execution
 
-Here is a really simple demonstration of this problem.
-In this trivial application, known locations in shared memory will be used to exchange data between a WebAssembly module and a JavaScript program.
+The following trivial application demonstrates this problem.
+A WebAssembly program shares a block of memory in which data can be exchanged with the host environment.
+The host writes data to known location in memory, and the WebAssembly program processes this data, and writes its response back at another known location.
 
 ### Generate the WebAssembly Module
 
@@ -55,7 +62,7 @@ Testing can be performed using different versions of the Wasm module:
 
 ### Run the JavaScript Tests
 
-The tests are run as follows:
+The effects of WebAssembly memory growth on the `ArrayBuffer` used by JavaScript can be demonstrated  as follows:
 
 1. In both `server.js` and `client.js`, ensure that the variable `wasmFilePath` points to the particular Wasm module you wish to test.
 1. To test the Wasm module server side, run
@@ -73,13 +80,13 @@ The tests are run as follows:
    * Point your browser to <http://localhost:8080>
    * Open the developer console
 
-When the test succeeds, you will see
+When the test succeeds, the console will display
 
 ```
 Ahoy there, Testy McTestface!
 ```
 
-When the test fails, you will see the Type Error shown above.
+When the test fails, the console will show the Type Error shown above.
 
 ## Implementation
 
@@ -93,7 +100,7 @@ The memory map looks like this:
 
 Irrespective of the source language from which the Wasm module was generated, the JavaScript program must first obtain the values of the memory locations shown above, then it writes strings to those locations.
 
-Next, it calls the Wasm function `set_name` that combines the salutation and name, then writes the greeting to another known memory location.
+Next, it calls the Wasm function `set_name` that combines the salutation and name into a greeting, then writes that greeting to another known memory location.
 `set_name` then returns the length of the formatted greeting.
 
 Finally, the JavaScript program reads the greeting from shared memory and writes it to the console.
@@ -113,10 +120,12 @@ pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
 // snip...
 ```
 
-Looks harmless enough...
+Well that looks harmless enough...
 
 However, the declaration of the new `String` requires more memory than is currently available; so, using the extra functions generated by `cargo`, shared memory is automatically and silently extended.
 The JavaScript host environment then sees that this has happened and dutifully throws away the old `ArrayBuffer` and creates a new one.
+
+And now all your existing JavaScript references into WebAssembly's shared memory are broken...
 
 ## Calling The Broken Code From JavaScript
 
