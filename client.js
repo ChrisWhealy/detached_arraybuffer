@@ -53,6 +53,7 @@ startWasm(wasmFilePath)
 
     // Read greeting from shared memory
     let msg_text = asciiArrayToString(mem8.slice(msg_ptr, msg_ptr + msg_len))
+    //                                ^^^^^^^^^^ mem8 will point to nothing if shared memory is extended
 
     console.log(msg_text)
   })

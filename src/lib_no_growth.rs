@@ -41,8 +41,7 @@ pub unsafe extern "C" fn get_msg_ptr() -> *const u8 {
 pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
     let mut idx: usize;
 
-    // Write bytes of formatted string directly to buffer
-    // Write salutation
+    // Write salutation directly to the buffer
     copy_bytes(MSG_OFFSET, SALUT_OFFSET, sal_len);
     idx = MSG_OFFSET + sal_len as usize;
 
