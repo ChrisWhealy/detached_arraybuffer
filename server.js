@@ -2,19 +2,18 @@ const fs = require("fs")
 
 /***
  * Pick up the Wasm module built using wat2wasm
- * Since this module was hand-written directly in WebAssembly Text, it does not contain the functionality to reallocate
- * shared memory.
  *
- * The detached ArrayBuffer problem cannot happen when using this version of the module
+ * Since this module was hand-written in WebAssembly Text, it does not contain the functionality to grow shared memory.
+ * Consequently, the "detached ArrayBuffer" problem cannot happen when using this version of the module
  */
 // const wasmFilePath = "./memoryguest.wasm"
 
 /***
  * Pick up the Wasm module built using cargo
- * Since this module was written in Rust, the Rust compiler inserts extra functionality into the module that allows it
- * to adjust shared memory if necessary
  *
- * Therefore, the detached ArrayBuffer problem might happen when using this version of the module
+ * Since this module was written in Rust, the Rust compiler inserts extra functionality into the Wasm module to allows
+ * it to grow shared memory if necessary. Therefore, the "detached ArrayBuffer" problem might happen when using this
+ * version of the module
  */
 const wasmFilePath = "./target/wasm32-unknown-unknown/debug/memoryguest.wasm"
 

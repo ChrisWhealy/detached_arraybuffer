@@ -21,6 +21,9 @@ pub unsafe extern "C" fn get_msg_ptr() -> *const u8 {
 }
 
 #[no_mangle]
+/// Place the formatted greeting at the known memory location and return the total length
+///
+/// The use an intermediate String object to hold the formatted greeting inadvertently causes Wasm memory growth
 pub unsafe extern "C" fn set_name(sal_len: i32, name_len: i32) -> i32 {
     let sal: &str = str_from_buffer(SALUT_OFFSET, sal_len as usize);
     let name: &str = str_from_buffer(NAME_OFFSET, name_len as usize);
